@@ -15,6 +15,17 @@ swap in **Lite** and **Wireless** SDK calls later.
 python reachy_solar_system.py
 ```
 
+## Quick setup (school desktop)
+Lite/USB (no simulation):
+```powershell
+.\setup.ps1
+```
+
+Simulation + mujoco:
+```powershell
+.\setup.ps1 -WithMujoco
+```
+
 ## Next steps for Lite/Wireless
 Replace `SimulationAdapter` in `reachy_solar_system.py` with a new adapter that
 wraps the official Reachy Mini SDK (speech + head/antenna motions).
