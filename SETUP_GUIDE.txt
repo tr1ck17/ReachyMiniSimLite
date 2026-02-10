@@ -64,3 +64,26 @@ If "python" is not found, use:
 If you open a new terminal, activate the venv again:
 
   .\.venv\Scripts\Activate.ps1
+
+------------------------------------------------------------
+6) WHAT THE .PS1 FILES DO
+------------------------------------------------------------
+PowerShell (.ps1) scripts automate setup on Windows.
+Run them from PowerShell inside the project folder:
+
+  .\setup.ps1
+
+If scripts are blocked, allow them once:
+
+  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+Scripts:
+ - setup.ps1
+   Creates the venv and installs base dependencies.
+   Use -WithMujoco to add simulation support.
+
+ - setup_offline.ps1
+   Installs Lite/USB + offline voice + local LLM and downloads models.
+
+ - setup_lite_voice.ps1
+   Installs Lite/USB + offline voice only and downloads the Vosk model.
