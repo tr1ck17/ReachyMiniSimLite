@@ -26,6 +26,19 @@ Simulation + mujoco:
 .\setup.ps1 -WithMujoco
 ```
 
+## Offline voice + chat (no OpenAI billing)
+This uses local STT/TTS + a tiny local LLM for off-topic chat.
+```powershell
+.\setup_offline.ps1
+.\.venv\Scripts\python reachy_solar_system_lite_voice_offline.py
+```
+
+## Lite voice (offline, no LLM)
+```powershell
+.\setup_lite_voice.ps1
+.\.venv\Scripts\python reachy_solar_system_lite.py
+```
+
 ## Next steps for Lite/Wireless
 Replace `SimulationAdapter` in `reachy_solar_system.py` with a new adapter that
 wraps the official Reachy Mini SDK (speech + head/antenna motions).

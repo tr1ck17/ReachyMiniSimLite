@@ -1,0 +1,4 @@
+reachy-mini
+vosk
+pyttsx3
+llama-cpp-python

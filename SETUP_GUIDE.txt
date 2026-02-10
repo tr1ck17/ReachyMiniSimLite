@@ -1,0 +1,66 @@
+SETUP GUIDE (Windows)
+
+This file explains how to set up and run:
+ - reachy_solar_system.py (text-only)
+ - reachy_solar_system_sim.py (simulation)
+ - reachy_solar_system_lite.py (Lite/USB with optional offline voice)
+
+------------------------------------------------------------
+1) COMMON SETUP (Text-only + Simulation)
+------------------------------------------------------------
+Open PowerShell in the project folder and run:
+
+  .\setup.ps1
+
+If you want the simulation version, install MuJoCo extras:
+
+  .\setup.ps1 -WithMujoco
+
+Activate the virtual environment (once per terminal session):
+
+  .\.venv\Scripts\Activate.ps1
+
+------------------------------------------------------------
+2) RUN TEXT-ONLY
+------------------------------------------------------------
+  python reachy_solar_system.py
+
+------------------------------------------------------------
+3) RUN SIMULATION (Dashboard App must be running)
+------------------------------------------------------------
+Open the Reachy Mini Dashboard, choose Simulation, and wake the robot.
+Then run:
+
+  python reachy_solar_system_sim.py
+
+------------------------------------------------------------
+4) LITE / USB WITH OFFLINE VOICE
+------------------------------------------------------------
+If you want speaking + optional speech input on Lite (no OpenAI billing),
+run the Lite voice setup:
+
+  .\setup_lite_voice.ps1
+
+Then activate the venv:
+
+  .\.venv\Scripts\Activate.ps1
+
+Run Lite:
+
+  python reachy_solar_system_lite.py
+
+Notes:
+ - Voice uses Vosk (STT) + pyttsx3 (TTS).
+ - A Vosk model is downloaded into the "models" folder.
+ - If the Vosk model is missing, text input still works.
+
+------------------------------------------------------------
+5) TROUBLESHOOTING
+------------------------------------------------------------
+If "python" is not found, use:
+
+  py reachy_solar_system.py
+
+If you open a new terminal, activate the venv again:
+
+  .\.venv\Scripts\Activate.ps1
