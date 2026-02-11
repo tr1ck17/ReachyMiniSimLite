@@ -507,9 +507,9 @@ def deliver_level(adapter: ReachyAdapter, voice: Optional[OfflineVoiceIO], level
         adapter.say(f"Bonus fact: {fact}")
 
 
-# ----------------------------
+
 # Program flow
-# ----------------------------
+
 
 def program_menu() -> None:
     print("\nSolar System Courseware")
