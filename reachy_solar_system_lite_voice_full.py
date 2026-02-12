@@ -493,7 +493,7 @@ class LessonLevel:
 
 LEVELS: List[LessonLevel] = [
     LessonLevel(
-        title="Level 1: The Foundation (Chemistry & Density)",
+        title="The Foundation (Chemistry & Density)",
         goal="Understand that the Sun is a pressurized ball of gas, not a solid object.",
         physics=(
             "The Sun is a plasma. On Earth we have solids, liquids, and gases. "
@@ -514,7 +514,7 @@ LEVELS: List[LessonLevel] = [
         ],
     ),
     LessonLevel(
-        title="Level 2: The Core (Nuclear Physics)",
+        title="The Core (Nuclear Physics)",
         goal="Explain the strong nuclear force and fusion.",
         physics=(
             "At the core, gravity creates immense pressure. This overcomes the "
@@ -536,7 +536,7 @@ LEVELS: List[LessonLevel] = [
         ],
     ),
     LessonLevel(
-        title="Level 3: The Radiative Zone (Photon Physics)",
+        title="The Radiative Zone (Photon Physics)",
         goal="Explain how energy moves through matter.",
         physics=(
             "Light particles (photons) try to leave the core but keep hitting dense "
@@ -556,7 +556,7 @@ LEVELS: List[LessonLevel] = [
         ],
     ),
     LessonLevel(
-        title="Level 4: The Convection Zone (Thermodynamics)",
+        title="The Convection Zone (Thermodynamics)",
         goal="Explain heat transfer through fluid movement.",
         physics=(
             "Closer to the surface, the Sun acts like a lava lamp. Hot plasma rises, "
@@ -577,7 +577,7 @@ LEVELS: List[LessonLevel] = [
         ],
     ),
     LessonLevel(
-        title="Level 5: The Atmosphere & Magnetism (Electromagnetism)",
+        title="The Atmosphere & Magnetism (Electromagnetism)",
         goal="Explain why the Sun has 'weather' at all.",
         physics=(
             "Because the Sun is plasma (charged), its movement creates magnetic fields. "
@@ -597,7 +597,7 @@ LEVELS: List[LessonLevel] = [
         ],
     ),
     LessonLevel(
-        title="Level 6: The Solar Wind (Plasma Dynamics)",
+        title="The Solar Wind (Plasma Dynamics)",
         goal="Explain how the Sun's 'weather' reaches Earth.",
         physics=(
             "The corona is so hot that particles escape the Sun's gravity. This creates "
@@ -1041,7 +1041,7 @@ def run() -> None:
     with ReachyMini() as mini:
         adapter = ReachyLiteVoiceAdapter(mini, voice)
         adapter.say(
-            "Hello! I'm Reachy. Let's explore the Sun, from the core to the solar wind."
+            "Hello! I'm Reachy. Let's explore the Sun!"
         )
 
         while True:
