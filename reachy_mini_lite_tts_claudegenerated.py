@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 Reachy Mini Lite Text-to-Speech Script (USB Connection)
 This script enables the Reachy Mini Lite robot to speak aloud using text-to-speech.
