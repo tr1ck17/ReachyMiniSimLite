@@ -20,7 +20,9 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 import json
 import os
+import tempfile
 import time
+import wave
 
 import numpy as np
 from reachy_mini import ReachyMini
@@ -46,13 +48,106 @@ VOSK_MODEL_PATH = os.getenv("VOSK_MODEL_PATH", "models/vosk-model-small-en-us-0.
 
 
 # ----------------------------
+# Auto-detect Reachy audio devices
+# ----------------------------
+
+# Common substrings that identify the Reachy Mini Lite's USB audio.
+# Add more if your Reachy shows up under a different name.
+REACHY_DEVICE_KEYWORDS = [
+    "reachy",
+    "mini",
+    "pollen",          # Pollen Robotics (maker of Reachy)
+    "usb audio",       # Generic USB audio class device
+    "usb pnp audio",   # Common Windows name for USB audio devices
+]
+
+
+def find_reachy_device(direction: str) -> Optional[int]:
+    """
+    Auto-detect the Reachy's audio device by scanning device names.
+
+    Args:
+        direction: 'input' or 'output'.
+
+    Returns:
+        Device index, or None if not found.
+    """
+    devices = sd.query_devices()
+    for i, dev in enumerate(devices):
+        name_lower = dev["name"].lower()
+        if direction == "input" and dev["max_input_channels"] == 0:
+            continue
+        if direction == "output" and dev["max_output_channels"] == 0:
+            continue
+        for keyword in REACHY_DEVICE_KEYWORDS:
+            if keyword in name_lower:
+                return i
+    return None
+
+
+def detect_reachy_audio() -> tuple[Optional[int], Optional[int]]:
+    """
+    Auto-detect the Reachy Mini Lite's built-in mic and speaker.
+
+    Scans all audio devices for names matching known Reachy/USB audio
+    keywords. Falls back to system defaults if not found.
+
+    Returns:
+        (input_device_index, output_device_index) -- None means system default.
+    """
+    input_idx = find_reachy_device("input")
+    output_idx = find_reachy_device("output")
+
+    devices = sd.query_devices()
+
+    if input_idx is not None:
+        print(f"[Audio] Reachy mic detected: device {input_idx} ({devices[input_idx]['name']})")
+    else:
+        print("[Audio] Reachy mic not detected -- using system default microphone.")
+        print("        (If the Reachy is connected, check USB and try again.)")
+
+    if output_idx is not None:
+        print(f"[Audio] Reachy speaker detected: device {output_idx} ({devices[output_idx]['name']})")
+    else:
+        print("[Audio] Reachy speaker not detected -- using system default speaker.")
+        print("        (If the Reachy is connected, check USB and try again.)")
+
+    # Show all devices for troubleshooting if either was not found
+    if input_idx is None or output_idx is None:
+        print("\n  All audio devices on this system:")
+        for i, dev in enumerate(devices):
+            ins = dev["max_input_channels"]
+            outs = dev["max_output_channels"]
+            tags = []
+            if ins > 0:
+                tags.append("mic")
+            if outs > 0:
+                tags.append("speaker")
+            print(f"    {i}: {dev['name']}  [{', '.join(tags)}]")
+        print()
+
+    return input_idx, output_idx
+
+
+# ----------------------------
 # Offline Voice I/O
 # ----------------------------
 
 class OfflineVoiceIO:
-    """Free, offline TTS + STT using pyttsx3 and Vosk."""
+    """
+    Free, offline TTS + STT using pyttsx3 and Vosk.
 
-    def __init__(self, sample_rate: int = 16000, record_seconds: float = 5.0) -> None:
+    Supports routing audio to specific devices (e.g. Reachy's built-in
+    mic and speaker) instead of the system defaults.
+    """
+
+    def __init__(
+        self,
+        sample_rate: int = 16000,
+        record_seconds: float = 5.0,
+        input_device: Optional[int] = None,
+        output_device: Optional[int] = None,
+    ) -> None:
         if vosk is None:
             raise RuntimeError("vosk is not installed. Run: pip install vosk")
         if pyttsx3 is None:
@@ -66,6 +161,8 @@ class OfflineVoiceIO:
             )
         self.sample_rate = sample_rate
         self.record_seconds = record_seconds
+        self.input_device = input_device
+        self.output_device = output_device
         self.model = vosk.Model(VOSK_MODEL_PATH)
         self.tts_rate = 165
 
@@ -79,7 +176,13 @@ class OfflineVoiceIO:
         """Record from the microphone and return recognised text."""
         print("  [Listening... speak now]")
         frames = int(self.sample_rate * self.record_seconds)
-        audio = sd.rec(frames, samplerate=self.sample_rate, channels=1, dtype="int16")
+        audio = sd.rec(
+            frames,
+            samplerate=self.sample_rate,
+            channels=1,
+            dtype="int16",
+            device=self.input_device,
+        )
         sd.wait()
         rec = vosk.KaldiRecognizer(self.model, self.sample_rate)
         rec.AcceptWaveform(audio.tobytes())
@@ -93,18 +196,62 @@ class OfflineVoiceIO:
 
     def speak(self, text: str) -> None:
         """
-        Speak text aloud through the computer speakers.
+        Speak text aloud.
 
-        Creates a fresh pyttsx3 engine for every call to avoid the
-        Windows SAPI5 bug where runAndWait() silently fails after the
-        first use of a long-lived engine instance.
+        If an output device is set (e.g. Reachy's speaker), renders speech
+        to a temp WAV file via pyttsx3, then plays it through sounddevice
+        to the correct device.
+
+        If no output device is set, plays through the system default via
+        pyttsx3 directly.
         """
         engine = pyttsx3.init()
         engine.setProperty("rate", self.tts_rate)
-        engine.say(text)
-        engine.runAndWait()
-        engine.stop()
-        del engine
+
+        if self.output_device is not None:
+            # Save speech to a temp WAV, then play through the Reachy speaker
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                tmp_path = tmp.name
+            try:
+                engine.save_to_file(text, tmp_path)
+                engine.runAndWait()
+                engine.stop()
+                del engine
+                self._play_wav(tmp_path)
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+        else:
+            # Play through system default speaker directly
+            engine.say(text)
+            engine.runAndWait()
+            engine.stop()
+            del engine
+
+    def _play_wav(self, path: str) -> None:
+        """Play a WAV file through the selected output device."""
+        with wave.open(path, "rb") as wf:
+            n_channels = wf.getnchannels()
+            sample_width = wf.getsampwidth()
+            framerate = wf.getframerate()
+            raw = wf.readframes(wf.getnframes())
+
+        # Convert raw bytes to numpy array
+        if sample_width == 2:
+            dtype = np.int16
+        elif sample_width == 4:
+            dtype = np.int32
+        else:
+            dtype = np.int16
+
+        audio = np.frombuffer(raw, dtype=dtype)
+        if n_channels > 1:
+            audio = audio.reshape(-1, n_channels)
+
+        sd.play(audio, samplerate=framerate, device=self.output_device)
+        sd.wait()
 
 
 # ----------------------------
@@ -748,10 +895,23 @@ def question_loop(adapter: ReachyAdapter, voice: Optional[OfflineVoiceIO]) -> No
             )
 
 
-def build_voice() -> Optional[OfflineVoiceIO]:
+def build_voice(
+    input_device: Optional[int] = None,
+    output_device: Optional[int] = None,
+) -> Optional[OfflineVoiceIO]:
     """Try to initialise offline voice; fall back to text-only gracefully."""
     try:
-        voice = OfflineVoiceIO()
+        voice = OfflineVoiceIO(
+            input_device=input_device,
+            output_device=output_device,
+        )
+        if input_device is not None or output_device is not None:
+            parts = []
+            if input_device is not None:
+                parts.append(f"mic=device {input_device}")
+            if output_device is not None:
+                parts.append(f"speaker=device {output_device}")
+            print(f"[Voice] Using Reachy audio: {', '.join(parts)}")
         print("[Voice] Offline TTS + STT ready.")
         return voice
     except Exception as exc:
@@ -771,7 +931,9 @@ def run() -> None:
     via USB before continuing.
     """)
 
-    voice = build_voice()
+    # Auto-detect Reachy's built-in mic and speaker
+    input_dev, output_dev = detect_reachy_audio()
+    voice = build_voice(input_device=input_dev, output_device=output_dev)
 
     # Connect to the physical Reachy Mini Lite via USB (default connection)
     with ReachyMini() as mini:
