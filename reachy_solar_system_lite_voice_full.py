@@ -51,20 +51,33 @@ VOSK_MODEL_PATH = os.getenv("VOSK_MODEL_PATH", "models/vosk-model-small-en-us-0.
 # Auto-detect Reachy audio devices
 # ----------------------------
 
-# Common substrings that identify the Reachy Mini Lite's USB audio.
-# Add more if your Reachy shows up under a different name.
-REACHY_DEVICE_KEYWORDS = [
-    "reachy",
-    "mini",
-    "pollen",          # Pollen Robotics (maker of Reachy)
-    "usb audio",       # Generic USB audio class device
-    "usb pnp audio",   # Common Windows name for USB audio devices
+# Prioritised keyword lists for finding the Reachy's audio devices.
+# Searched in order -- first match wins. More specific names first.
+
+# For the microphone: prefer the speakerphone, avoid the camera mic.
+REACHY_MIC_KEYWORDS = [
+    "reachy mini audio",       # The speakerphone mic (best quality)
+    "echo cancelling",         # Speakerphone with echo cancelling
+    "reachy",                  # Generic fallback
+    "pollen",                  # Pollen Robotics
+]
+
+# For the speaker: look for the dedicated audio output.
+REACHY_SPEAKER_KEYWORDS = [
+    "output (reachy",          # "Output (Reachy Mini Audio)"
+    "reachy mini audio",       # The audio output device
+    "reachy",                  # Generic fallback
+    "pollen",                  # Pollen Robotics
 ]
 
 
 def find_reachy_device(direction: str) -> Optional[int]:
     """
     Auto-detect the Reachy's audio device by scanning device names.
+
+    Uses separate prioritised keyword lists for mic vs speaker to
+    ensure the speakerphone mic is preferred over the camera mic,
+    and the audio output is preferred over the speakerphone output.
 
     Args:
         direction: 'input' or 'output'.
@@ -73,14 +86,16 @@ def find_reachy_device(direction: str) -> Optional[int]:
         Device index, or None if not found.
     """
     devices = sd.query_devices()
-    for i, dev in enumerate(devices):
-        name_lower = dev["name"].lower()
-        if direction == "input" and dev["max_input_channels"] == 0:
-            continue
-        if direction == "output" and dev["max_output_channels"] == 0:
-            continue
-        for keyword in REACHY_DEVICE_KEYWORDS:
-            if keyword in name_lower:
+    keywords = REACHY_MIC_KEYWORDS if direction == "input" else REACHY_SPEAKER_KEYWORDS
+
+    # Search by priority: try each keyword in order across all devices
+    for keyword in keywords:
+        for i, dev in enumerate(devices):
+            if direction == "input" and dev["max_input_channels"] == 0:
+                continue
+            if direction == "output" and dev["max_output_channels"] == 0:
+                continue
+            if keyword in dev["name"].lower():
                 return i
     return None
 
