@@ -130,12 +130,48 @@ def detect_reachy_audio() -> tuple[Optional[int], Optional[int]]:
     output_idx = find_reachy_device("output")
 
     if input_idx is not None:
-        print(f"[Audio] Reachy mic    -> device {input_idx} ({devices[input_idx]['name']})")
+        dev = devices[input_idx]
+        print(f"[Audio] Reachy mic    -> device {input_idx} ({dev['name']})")
+        print(f"        channels={dev['max_input_channels']}, "
+              f"default_sr={dev['default_samplerate']}")
     else:
         print("[Audio] Reachy mic not detected -- using system default microphone.")
 
     if output_idx is not None:
-        print(f"[Audio] Reachy speaker -> device {output_idx} ({devices[output_idx]['name']})")
+        dev = devices[output_idx]
+        print(f"[Audio] Reachy speaker -> device {output_idx} ({dev['name']})")
+        print(f"        channels={dev['max_output_channels']}, "
+              f"default_sr={dev['default_samplerate']}")
+        # Verify the device can actually be opened for playback
+        try:
+            test_audio = np.zeros(1000, dtype=np.int16)
+            sd.play(test_audio, samplerate=22050, device=output_idx)
+            sd.wait()
+            print("[Audio] Speaker device verified -- playback works.")
+        except Exception as exc:
+            print(f"[Audio] WARNING: Speaker device {output_idx} failed: {exc}")
+            print("[Audio] Trying to find an alternative Reachy output device...")
+            # Try all other output devices with 'reachy' in the name
+            alt_found = False
+            for i, d in enumerate(devices):
+                if i == output_idx:
+                    continue
+                if d["max_output_channels"] == 0:
+                    continue
+                if "reachy" not in d["name"].lower():
+                    continue
+                try:
+                    sd.play(test_audio, samplerate=22050, device=i)
+                    sd.wait()
+                    print(f"[Audio] Alternative speaker found: device {i} ({d['name']})")
+                    output_idx = i
+                    alt_found = True
+                    break
+                except Exception:
+                    continue
+            if not alt_found:
+                print("[Audio] No working Reachy speaker found -- falling back to system default.")
+                output_idx = None
     else:
         print("[Audio] Reachy speaker not detected -- using system default speaker.")
 
@@ -256,10 +292,7 @@ class OfflineVoiceIO:
 
         If an output device is set (e.g. Reachy's speaker), renders speech
         to a temp WAV file via pyttsx3, then plays it through sounddevice
-        to the correct device.
-
-        If no output device is set, plays through the system default via
-        pyttsx3 directly.
+        to the correct device. Falls back to system default if that fails.
         """
         engine = pyttsx3.init()
         engine.setProperty("rate", self.tts_rate)
@@ -274,17 +307,26 @@ class OfflineVoiceIO:
                 engine.stop()
                 del engine
                 self._play_wav(tmp_path)
+                return
+            except Exception as exc:
+                print(f"  [TTS] Reachy speaker failed ({exc}), using system default.")
+                # Fall back to system default below
             finally:
                 try:
                     os.unlink(tmp_path)
                 except OSError:
                     pass
-        else:
-            # Play through system default speaker directly
+
+        # Play through system default speaker directly (or as fallback)
+        try:
+            engine = pyttsx3.init()
+            engine.setProperty("rate", self.tts_rate)
             engine.say(text)
             engine.runAndWait()
             engine.stop()
             del engine
+        except Exception:
+            pass
 
     def _play_wav(self, path: str) -> None:
         """Play a WAV file through the selected output device."""
