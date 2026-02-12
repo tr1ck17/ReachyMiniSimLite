@@ -95,38 +95,69 @@ def detect_reachy_audio() -> tuple[Optional[int], Optional[int]]:
     Returns:
         (input_device_index, output_device_index) -- None means system default.
     """
+    devices = sd.query_devices()
+
+    # Always show all devices so user can verify what was detected
+    print("\n  All audio devices on this system:")
+    print("  " + "-" * 60)
+    for i, dev in enumerate(devices):
+        ins = dev["max_input_channels"]
+        outs = dev["max_output_channels"]
+        tags = []
+        if ins > 0:
+            tags.append("mic")
+        if outs > 0:
+            tags.append("speaker")
+        print(f"    {i}: {dev['name']}  [{', '.join(tags)}]")
+    print("  " + "-" * 60)
+
     input_idx = find_reachy_device("input")
     output_idx = find_reachy_device("output")
 
-    devices = sd.query_devices()
-
     if input_idx is not None:
-        print(f"[Audio] Reachy mic detected: device {input_idx} ({devices[input_idx]['name']})")
+        print(f"[Audio] Reachy mic    -> device {input_idx} ({devices[input_idx]['name']})")
     else:
         print("[Audio] Reachy mic not detected -- using system default microphone.")
-        print("        (If the Reachy is connected, check USB and try again.)")
 
     if output_idx is not None:
-        print(f"[Audio] Reachy speaker detected: device {output_idx} ({devices[output_idx]['name']})")
+        print(f"[Audio] Reachy speaker -> device {output_idx} ({devices[output_idx]['name']})")
     else:
         print("[Audio] Reachy speaker not detected -- using system default speaker.")
-        print("        (If the Reachy is connected, check USB and try again.)")
-
-    # Show all devices for troubleshooting if either was not found
-    if input_idx is None or output_idx is None:
-        print("\n  All audio devices on this system:")
-        for i, dev in enumerate(devices):
-            ins = dev["max_input_channels"]
-            outs = dev["max_output_channels"]
-            tags = []
-            if ins > 0:
-                tags.append("mic")
-            if outs > 0:
-                tags.append("speaker")
-            print(f"    {i}: {dev['name']}  [{', '.join(tags)}]")
-        print()
 
     return input_idx, output_idx
+
+
+def test_microphone(input_device: Optional[int], sample_rate: int = 16000) -> bool:
+    """
+    Quick mic test: record 2 seconds and check if any sound was picked up.
+
+    Returns True if the mic seems to be working.
+    """
+    print("\n[Mic Test] Recording 2 seconds of audio -- speak or make noise...")
+    try:
+        frames = sample_rate * 2
+        audio = sd.rec(frames, samplerate=sample_rate, channels=1, dtype="int16", device=input_device)
+        sd.wait()
+
+        # Check audio level
+        peak = int(np.max(np.abs(audio)))
+        rms = int(np.sqrt(np.mean(audio.astype(np.float64) ** 2)))
+        print(f"[Mic Test] Peak level: {peak}  |  RMS level: {rms}  (out of 32767)")
+
+        if peak < 100:
+            print("[Mic Test] WARNING: Almost no sound detected. The mic may not be working")
+            print("           or the wrong device was selected.")
+            return False
+        elif peak < 1000:
+            print("[Mic Test] Low volume detected. Speech recognition may struggle.")
+            print("           Try speaking louder or closer to the mic.")
+            return True
+        else:
+            print("[Mic Test] Mic is working! Sound detected.")
+            return True
+    except Exception as exc:
+        print(f"[Mic Test] ERROR: {exc}")
+        return False
 
 
 # ----------------------------
@@ -174,7 +205,10 @@ class OfflineVoiceIO:
 
     def listen(self) -> str:
         """Record from the microphone and return recognised text."""
-        print("  [Listening... speak now]")
+        dev_name = ""
+        if self.input_device is not None:
+            dev_name = f" (device {self.input_device})"
+        print(f"  [Listening{dev_name}... speak now]")
         frames = int(self.sample_rate * self.record_seconds)
         audio = sd.rec(
             frames,
@@ -184,6 +218,13 @@ class OfflineVoiceIO:
             device=self.input_device,
         )
         sd.wait()
+
+        # Log audio level so we can tell if the mic is picking up sound
+        peak = int(np.max(np.abs(audio)))
+        print(f"  [Audio level: peak={peak}/32767]")
+        if peak < 100:
+            print("  [WARNING: Almost no sound detected -- check mic]")
+
         rec = vosk.KaldiRecognizer(self.model, self.sample_rate)
         rec.AcceptWaveform(audio.tobytes())
         result = json.loads(rec.Result())
@@ -933,6 +974,10 @@ def run() -> None:
 
     # Auto-detect Reachy's built-in mic and speaker
     input_dev, output_dev = detect_reachy_audio()
+
+    # Quick mic test so we know immediately if it's working
+    test_microphone(input_dev)
+
     voice = build_voice(input_device=input_dev, output_device=output_dev)
 
     # Connect to the physical Reachy Mini Lite via USB (default connection)
